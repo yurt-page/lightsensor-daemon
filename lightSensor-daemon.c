@@ -46,8 +46,8 @@
 #define POLL_TIMEOUT (3 * 1000) /* 3 seconds */
 #define MAX_BUF 64
 #define GPIO_LIGHT 11
-#define GPIO_IR_FILTER 14
-#define GPIO_IR_LED 12
+#define GPIO_IR_PIN1 12
+#define GPIO_IR_PIN2 14
 
 /****************************************************************
  * gpio_export
@@ -221,6 +221,16 @@ int gpio_fd_close(int fd)
 
 /****************************************************************
  * Main
+ * There are two GPIOs for the IR LED/Filter control.
+ * They are coded, meaning:
+ * 0 0 .. IR LEDs ON, filter OUT
+ * 0 1 .. IR LEDs ON, no active filter positioning
+ * 1 0 .. IR LEDs OFF, no active filter positioning
+ * 1 1 .. IR LEDs OFF, filter IN
+ *
+ * In order to reduce heat, the ICR positioning should be
+ * stopped after some time. Periodic repositioning of the filter
+ * is scheduled.
  ****************************************************************/
 int main(int argc, char **argv, char **envp)
 {
@@ -230,15 +240,16 @@ int main(int argc, char **argv, char **envp)
     char ch;
 	int dayMode = 0;
 	unsigned int gpio;
+	int releaseICR = 0;
 
 
     gpio_export(GPIO_LIGHT);
-	gpio_export(GPIO_IR_LED);
-	gpio_export(GPIO_IR_FILTER);
+	gpio_export(GPIO_IR_PIN1);
+	gpio_export(GPIO_IR_PIN2);
 	
 	gpio_set_dir(GPIO_LIGHT, 0);
-	gpio_set_dir(GPIO_IR_FILTER, 1);
-	gpio_set_dir(GPIO_IR_LED, 1);
+	gpio_set_dir(GPIO_IR_PIN1, 1);
+	gpio_set_dir(GPIO_IR_PIN2, 1);
 	
 	gpio_fd = gpio_fd_open(GPIO_LIGHT);
     gpio_get_value(GPIO_LIGHT, &dayMode);
@@ -251,17 +262,18 @@ int main(int argc, char **argv, char **envp)
 
 		if(count == 0)
 		{
-		  count = (300 * 1000) / POLL_TIMEOUT;
+		  count = (300 * 1000) / POLL_TIMEOUT; // 5 minutes
 		  if(dayMode)
 		  {
-		    gpio_set_value(GPIO_IR_LED, 0);
-		    gpio_set_value(GPIO_IR_FILTER, 1);
+		    gpio_set_value(GPIO_IR_PIN1, 1);
+		    gpio_set_value(GPIO_IR_PIN2, 1);
 		  }
 		  else
 		  {
-		    gpio_set_value(GPIO_IR_FILTER, 0);		  
-		    gpio_set_value(GPIO_IR_LED, 1);
+		    gpio_set_value(GPIO_IR_PIN1, 0);		  
+		    gpio_set_value(GPIO_IR_PIN2, 0);
 		  }
+		  releaseICR = 1;
 		}
      
 		fdset[1].fd = gpio_fd;
@@ -277,6 +289,20 @@ int main(int argc, char **argv, char **envp)
 		if (rc == 0) { // timeout
 			printf(".");
 			count--;
+			if(releaseICR)
+			{
+		      if(dayMode)
+		      {
+		        gpio_set_value(GPIO_IR_PIN1, 1);
+		        gpio_set_value(GPIO_IR_PIN2, 0);
+		      }
+		      else
+		      {
+		        gpio_set_value(GPIO_IR_PIN1, 0);		  
+		        gpio_set_value(GPIO_IR_PIN2, 1);
+		      }
+		      releaseICR = 0;
+			}
 		}
 		
 
@@ -289,8 +315,8 @@ int main(int argc, char **argv, char **envp)
 			  // Light sensor went high -> day
 			  if(!dayMode)
 			  {
-			    gpio_set_value(GPIO_IR_LED, 0);			  
-			    gpio_set_value(GPIO_IR_FILTER, 1);
+			    gpio_set_value(GPIO_IR_PIN1, 1);			  
+			    gpio_set_value(GPIO_IR_PIN2, 1);
 			    dayMode = 1;
 			  }
 			}
@@ -300,11 +326,12 @@ int main(int argc, char **argv, char **envp)
 			  // Light sensor went low -> night
 			  if(dayMode)
 			  {
-			    gpio_set_value(GPIO_IR_FILTER, 0);
-			    gpio_set_value(GPIO_IR_LED, 1);
+			    gpio_set_value(GPIO_IR_PIN1, 0);
+			    gpio_set_value(GPIO_IR_PIN2, 0);
 			    dayMode = 0;
 			  }
 			}
+			releaseICR = 1;
 		}
 
 	}
