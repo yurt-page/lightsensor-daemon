@@ -3,7 +3,7 @@
  * based on GPIO example,
  * Copyright (c) 2011, RidgeRun
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  * 1. Redistributions of source code must retain the above copyright
@@ -17,7 +17,7 @@
  * 4. Neither the name of the RidgeRun nor the
  *    names of its contributors may be used to endorse or promote products
  *    derived from this software without specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY RIDGERUN ''AS IS'' AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
  * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
@@ -37,11 +37,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <syslog.h>
+#include <signal.h>
 
- /****************************************************************
- * Constants
- ****************************************************************/
- 
+// Declare some constants
+
 #define SYSFS_GPIO_DIR "/sys/class/gpio"
 #define POLL_TIMEOUT (3 * 1000) /* 3 seconds */
 #define MAX_BUF 64
@@ -49,177 +49,170 @@
 #define GPIO_IR_PIN1 12
 #define GPIO_IR_PIN2 14
 
-/****************************************************************
- * gpio_export
- ****************************************************************/
 int gpio_export(unsigned int gpio)
 {
-	int fd, len;
-	char buf[MAX_BUF];
- 
-	fd = open(SYSFS_GPIO_DIR "/export", O_WRONLY);
-	if (fd < 0) {
-		perror("gpio/export");
-		return fd;
-	}
- 
-	len = snprintf(buf, sizeof(buf), "%d", gpio);
-	write(fd, buf, len);
-	close(fd);
- 
-	return 0;
+  int fd, len;
+  char buf[MAX_BUF];
+
+  fd = open(SYSFS_GPIO_DIR "/export", O_WRONLY);
+  if (fd < 0) {
+    syslog(LOG_ERR, "gpio/export failed: %i", gpio);
+    perror("gpio/export");
+    return fd;
+  }
+
+  len = snprintf(buf, sizeof(buf), "%d", gpio);
+  write(fd, buf, len);
+  close(fd);
+
+  return 0;
 }
 
-/****************************************************************
- * gpio_unexport
- ****************************************************************/
 int gpio_unexport(unsigned int gpio)
 {
-	int fd, len;
-	char buf[MAX_BUF];
- 
-	fd = open(SYSFS_GPIO_DIR "/unexport", O_WRONLY);
-	if (fd < 0) {
-		perror("gpio/export");
-		return fd;
-	}
- 
-	len = snprintf(buf, sizeof(buf), "%d", gpio);
-	write(fd, buf, len);
-	close(fd);
-	return 0;
+  int fd, len;
+  char buf[MAX_BUF];
+
+  fd = open(SYSFS_GPIO_DIR "/unexport", O_WRONLY);
+  if (fd < 0) {
+    syslog(LOG_ERR, "gpio/unexport failed: %i", gpio);
+    perror("gpio/export");
+    return fd;
+  }
+
+  len = snprintf(buf, sizeof(buf), "%d", gpio);
+  write(fd, buf, len);
+  close(fd);
+  return 0;
 }
 
-/****************************************************************
- * gpio_set_dir
- ****************************************************************/
 int gpio_set_dir(unsigned int gpio, unsigned int out_flag)
 {
-	int fd, len;
-	char buf[MAX_BUF];
- 
-	len = snprintf(buf, sizeof(buf), SYSFS_GPIO_DIR  "/gpio%d/direction", gpio);
- 
-	fd = open(buf, O_WRONLY);
-	if (fd < 0) {
-		perror("gpio/direction");
-		return fd;
-	}
- 
-	if (out_flag)
-		write(fd, "out", 4);
-	else
-		write(fd, "in", 3);
- 
-	close(fd);
-	return 0;
+  int fd, len;
+  char buf[MAX_BUF];
+
+  len = snprintf(buf, sizeof(buf), SYSFS_GPIO_DIR  "/gpio%d/direction", gpio);
+
+  fd = open(buf, O_WRONLY);
+  if (fd < 0) {
+    syslog(LOG_ERR, "gpio/direction failed: %i", gpio);
+    perror("gpio/direction");
+    return fd;
+  }
+
+  if (out_flag)
+    write(fd, "out", 4);
+  else
+    write(fd, "in", 3);
+
+  close(fd);
+  return 0;
 }
 
-/****************************************************************
- * gpio_set_value
- ****************************************************************/
 int gpio_set_value(unsigned int gpio, unsigned int value)
 {
-	int fd, len;
-	char buf[MAX_BUF];
- 
-	len = snprintf(buf, sizeof(buf), SYSFS_GPIO_DIR "/gpio%d/value", gpio);
- 
-	fd = open(buf, O_WRONLY);
-	if (fd < 0) {
-		perror("gpio/set-value");
-		return fd;
-	}
- 
-	if (value)
-		write(fd, "1", 2);
-	else
-		write(fd, "0", 2);
- 
-	close(fd);
-	return 0;
+  int fd, len;
+  char buf[MAX_BUF];
+
+  len = snprintf(buf, sizeof(buf), SYSFS_GPIO_DIR "/gpio%d/value", gpio);
+
+  fd = open(buf, O_WRONLY);
+  if (fd < 0) {
+    syslog(LOG_ERR, "gpio/set-value failed: %i", gpio);
+    perror("gpio/set-value");
+    return fd;
+  }
+
+  if (value)
+    write(fd, "1", 2);
+  else
+    write(fd, "0", 2);
+
+  close(fd);
+  return 0;
 }
 
-/****************************************************************
- * gpio_get_value
- ****************************************************************/
 int gpio_get_value(unsigned int gpio, unsigned int *value)
 {
-	int fd, len;
-	char buf[MAX_BUF];
-	char ch;
+  int fd, len;
+  char buf[MAX_BUF];
+  char ch;
 
-	len = snprintf(buf, sizeof(buf), SYSFS_GPIO_DIR "/gpio%d/value", gpio);
- 
-	fd = open(buf, O_RDONLY);
-	if (fd < 0) {
-		perror("gpio/get-value");
-		return fd;
-	}
- 
-	read(fd, &ch, 1);
+  len = snprintf(buf, sizeof(buf), SYSFS_GPIO_DIR "/gpio%d/value", gpio);
 
-	if (ch != '0') {
-		*value = 1;
-	} else {
-		*value = 0;
-	}
- 
-	close(fd);
-	return 0;
+  fd = open(buf, O_RDONLY);
+  if (fd < 0) {
+    syslog(LOG_ERR, "gpio/get-value failed: %i", gpio);
+    perror("gpio/get-value");
+    return fd;
+  }
+
+  read(fd, &ch, 1);
+
+  if (ch != '0') {
+    *value = 1;
+  } else {
+    *value = 0;
+  }
+
+  close(fd);
+  return 0;
 }
-
-
-/****************************************************************
- * gpio_set_edge
- ****************************************************************/
 
 int gpio_set_edge(unsigned int gpio, char *edge)
 {
-	int fd, len;
-	char buf[MAX_BUF];
+  int fd, len;
+  char buf[MAX_BUF];
 
-	len = snprintf(buf, sizeof(buf), SYSFS_GPIO_DIR "/gpio%d/edge", gpio);
- 
-	fd = open(buf, O_WRONLY);
-	if (fd < 0) {
-		perror("gpio/set-edge");
-		return fd;
-	}
- 
-	write(fd, edge, strlen(edge) + 1); 
-	close(fd);
-	return 0;
+  len = snprintf(buf, sizeof(buf), SYSFS_GPIO_DIR "/gpio%d/edge", gpio);
+
+  fd = open(buf, O_WRONLY);
+  if (fd < 0) {
+    syslog(LOG_ERR, "gpio/set-edge failed: %i", gpio);
+    perror("gpio/set-edge");
+    return fd;
+  }
+
+  write(fd, edge, strlen(edge) + 1);
+  close(fd);
+  return 0;
 }
-
-/****************************************************************
- * gpio_fd_open
- ****************************************************************/
 
 int gpio_fd_open(unsigned int gpio)
 {
-	int fd, len;
-	char buf[MAX_BUF];
+  int fd, len;
+  char buf[MAX_BUF];
 
-	len = snprintf(buf, sizeof(buf), SYSFS_GPIO_DIR "/gpio%d/value", gpio);
- 
-	fd = open(buf, O_RDONLY | O_NONBLOCK );
-	if (fd < 0) {
-		perror("gpio/fd_open");
-	}
-	return fd;
+  len = snprintf(buf, sizeof(buf), SYSFS_GPIO_DIR "/gpio%d/value", gpio);
+
+  fd = open(buf, O_RDONLY | O_NONBLOCK );
+  if (fd < 0) {
+    syslog(LOG_ERR, "gpio/fd_open failed: %i", gpio);
+    perror("gpio/fd_open");
+  }
+  return fd;
 }
-
-/****************************************************************
- * gpio_fd_close
- ****************************************************************/
 
 int gpio_fd_close(int fd)
 {
-	return close(fd);
+  return close(fd);
 }
 
-/****************************************************************
+static void sighandler(int sig)
+{
+  syslog(LOG_DEBUG, "Signal Handler called\n");
+  switch(sig)
+  {
+  case SIGINT:
+  case SIGTERM:
+    gpio_set_value(GPIO_IR_PIN1, 1);
+    gpio_set_value(GPIO_IR_PIN2, 0);
+    exit(EXIT_SUCCESS);
+    break;
+  }
+}
+
+/*
  * Main
  * There are two GPIOs for the IR LED/Filter control.
  * They are coded, meaning:
@@ -231,111 +224,200 @@ int gpio_fd_close(int fd)
  * In order to reduce heat, the ICR positioning should be
  * stopped after some time. Periodic repositioning of the filter
  * is scheduled.
- ****************************************************************/
+ */
 int main(int argc, char **argv, char **envp)
 {
-	struct pollfd fdset[1];
-	int nfds = 1;
-	int gpio_fd, timeout, rc, count;
-    char ch;
-	int dayMode = 0;
-	unsigned int gpio;
-	int releaseICR = 0;
+  struct pollfd fdset[1];
+  int nfds = 1;
+  int gpio_fd, timeout, rc, count, len, i;
+  char ch;
+  int dayMode = 0;
+  unsigned int gpio;
+  int releaseICR = 0;
+  char buf[MAX_BUF];
+  int goDaemon = 1;
+  int debug = 0;
+  pid_t pid;
+  pid_t sid;
 
 
-    gpio_export(GPIO_LIGHT);
-	gpio_export(GPIO_IR_PIN1);
-	gpio_export(GPIO_IR_PIN2);
-	
-	gpio_set_dir(GPIO_LIGHT, 0);
-	gpio_set_dir(GPIO_IR_PIN1, 1);
-	gpio_set_dir(GPIO_IR_PIN2, 1);
-	
-	gpio_fd = gpio_fd_open(GPIO_LIGHT);
-    gpio_get_value(GPIO_LIGHT, &dayMode);
+  // Parse command line arguments
+  while((i = getopt(argc, argv, "fc:d")) != -1)
+  {
+    switch(i)
+    {
+    case 'f':
+      goDaemon = 0;
+      break;
+    case 'd':
+      debug = 1;
+      goDaemon = 0;
+      break;
+    case '?':
+      if (isprint (optopt))
+        fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+      else
+        fprintf (stderr,
+                 "Unknown option character `\\x%x'.\n",
+                 optopt);
+      fprintf(stderr, "Usage: %s [-f] [-d]\n", argv[0]);
+      fprintf(stderr, "       where\n");
+      fprintf(stderr, "         -f              don't detach\n");
+      fprintf(stderr, "         -d              debug (implies -f)\n");
+      return EXIT_FAILURE;
+    }
 
-	timeout = POLL_TIMEOUT;
-	count = 0; // Set to 0 for initial setup based on initial read of light sensor
- 
-	while (1) {
-		memset((void*)fdset, 0, sizeof(fdset));
+  }
+  
+  // Setup syslog
+  if(debug)
+    setlogmask(LOG_UPTO(LOG_DEBUG));
+  else
+    setlogmask(LOG_UPTO(LOG_INFO));
+  
+  if(goDaemon)
+    openlog("lightSensor-daemon", LOG_CONS | LOG_PID | LOG_NDELAY, LOG_LOCAL1);
+  else
+    openlog("lightSensor-daemon", LOG_CONS | LOG_PID | LOG_NDELAY | LOG_PERROR, LOG_LOCAL1);
 
-		if(count == 0)
-		{
-		  count = (300 * 1000) / POLL_TIMEOUT; // 5 minutes
-		  if(dayMode)
-		  {
-		    gpio_set_value(GPIO_IR_PIN1, 1);
-		    gpio_set_value(GPIO_IR_PIN2, 1);
-		  }
-		  else
-		  {
-		    gpio_set_value(GPIO_IR_PIN1, 0);		  
-		    gpio_set_value(GPIO_IR_PIN2, 0);
-		  }
-		  releaseICR = 1;
-		}
-     
-		fdset[1].fd = gpio_fd;
-		fdset[1].events = POLLIN;
+  if(goDaemon)
+  {
+    pid = fork();
+    if(pid < 0)
+    {
+      syslog(LOG_ERR, "Forking failed.\n");
+      return EXIT_FAILURE;
+    }
+    
+    if(pid > 0)
+    {
+      return EXIT_SUCCESS;
+    }
+    // From here on we are the child process...
+    umask(0);
+    sid = setsid();
+    if(sid < 0)
+    {
+      syslog(LOG_ERR, "Could not create process group\n");
+      return EXIT_FAILURE;
+    }
+    
+    if((chdir("/")) < 0)
+    {
+      syslog(LOG_ERR, "Could not chdir(\"/\")\n");
+      return EXIT_FAILURE;
+    }
+    close(STDIN_FILENO);
+    close(STDOUT_FILENO);
+    close(STDERR_FILENO);
 
-		rc = poll(fdset, nfds, timeout);
+  }
 
-		if (rc < 0) {
-			printf("\npoll() failed!\n");
-			return -1;
-		}
-      
-		if (rc == 0) { // timeout
-			printf(".");
-			count--;
-			if(releaseICR)
-			{
-		      if(dayMode)
-		      {
-		        gpio_set_value(GPIO_IR_PIN1, 1);
-		        gpio_set_value(GPIO_IR_PIN2, 0);
-		      }
-		      else
-		      {
-		        gpio_set_value(GPIO_IR_PIN1, 0);		  
-		        gpio_set_value(GPIO_IR_PIN2, 1);
-		      }
-		      releaseICR = 0;
-			}
-		}
-		
+  
+  
+  // Register some signal handlers
+  signal(SIGTERM, sighandler);
+  signal(SIGINT, sighandler);
 
-            
-		if (fdset[0].revents & POLLIN) {
-			read(fdset[1].fd, &ch, 1);
-			if(ch != '0')
-			{
-			  printf("Light sensor reported day\n");
-			  // Light sensor went high -> day
-			  if(!dayMode)
-			  {
-			    gpio_set_value(GPIO_IR_PIN1, 1);			  
-			    gpio_set_value(GPIO_IR_PIN2, 1);
-			    dayMode = 1;
-			  }
-			}
-			else
-			{
-			  printf("Light sensor reported night\n");
-			  // Light sensor went low -> night
-			  if(dayMode)
-			  {
-			    gpio_set_value(GPIO_IR_PIN1, 0);
-			    gpio_set_value(GPIO_IR_PIN2, 0);
-			    dayMode = 0;
-			  }
-			}
-			releaseICR = 1;
-		}
+  gpio_export(GPIO_LIGHT);
+  gpio_export(GPIO_IR_PIN1);
+  gpio_export(GPIO_IR_PIN2);
 
-	}
+  gpio_set_dir(GPIO_LIGHT, 0);
+  gpio_set_dir(GPIO_IR_PIN1, 1);
+  gpio_set_dir(GPIO_IR_PIN2, 1);
+  gpio_set_edge(GPIO_LIGHT, "both");
 
-	gpio_fd_close(gpio_fd);
-	return 0;
+  gpio_fd = gpio_fd_open(GPIO_LIGHT);
+  gpio_get_value(GPIO_LIGHT, &dayMode);
+
+  timeout = POLL_TIMEOUT;
+  count = 0; // Set to 0 for initial setup based on initial read of light sensor
+
+
+  syslog(LOG_INFO, "lightSensor-daemon starting up...");
+
+  while (1) {
+    memset((void*)fdset, 0, sizeof(fdset));
+
+    if(count == 0) // This is the periodic re-positioning of the filter
+    {
+      syslog(LOG_DEBUG, "Periodic set called");
+      count = (300 * 1000) / timeout; // 5 minutes
+      if(dayMode)
+      {
+        gpio_set_value(GPIO_IR_PIN1, 1);
+        gpio_set_value(GPIO_IR_PIN2, 1);
+      }
+      else
+      {
+        gpio_set_value(GPIO_IR_PIN1, 0);
+        gpio_set_value(GPIO_IR_PIN2, 0);
+      }
+      releaseICR = 1;
+    }
+
+    fdset[0].fd = gpio_fd;
+    fdset[0].events = POLLPRI;
+
+    rc = poll(fdset, nfds, timeout);
+
+    if (rc < 0) {
+      syslog(LOG_ERR, "poll() failed");
+      return -1;
+    }
+
+    if (rc == 0) { // timeout
+      count--;
+      if(releaseICR)
+      {
+        syslog(LOG_DEBUG, "Release ICR called");
+        if(dayMode)
+        {
+          gpio_set_value(GPIO_IR_PIN1, 1);
+          gpio_set_value(GPIO_IR_PIN2, 0);
+        }
+        else
+        {
+          gpio_set_value(GPIO_IR_PIN1, 0);
+          gpio_set_value(GPIO_IR_PIN2, 1);
+        }
+        releaseICR = 0;
+      }
+    }
+
+
+    // POLLPRI executed, an interrupt occured, something changed
+    if (fdset[0].revents & POLLPRI) {
+      lseek(fdset[0].fd, 0, SEEK_SET);
+      len = read(fdset[0].fd, buf, MAX_BUF);
+      if((len == 2) && (buf[0] != '0'))
+      {
+        syslog(LOG_DEBUG, "Light sensor reported day");
+        // Light sensor went high -> day
+        if(!dayMode)
+        {
+          gpio_set_value(GPIO_IR_PIN1, 1);
+          gpio_set_value(GPIO_IR_PIN2, 1);
+          dayMode = 1;
+        }
+      }
+      else
+      {
+        syslog(LOG_DEBUG, "Light sensor reported night");
+        // Light sensor went low -> night
+        if(dayMode)
+        {
+          gpio_set_value(GPIO_IR_PIN1, 0);
+          gpio_set_value(GPIO_IR_PIN2, 0);
+          dayMode = 0;
+        }
+      }
+      releaseICR = 1;
+    }
+
+  }
+
+  gpio_fd_close(gpio_fd);
+  return 0;
 }
